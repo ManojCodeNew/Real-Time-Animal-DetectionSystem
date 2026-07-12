@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 from database import crud
 import collections
+import os
 
 class StatisticalPredictor:
     def __init__(self, db_session):
@@ -15,6 +16,18 @@ class StatisticalPredictor:
         events = crud.get_recent_events(self.db, limit=500)
         species_events = [e for e in events if e.species.name == species_name]
         
+        # Load prediction mode from settings
+        prediction_mode = "automatic"
+        settings_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "settings.json")
+        if os.path.exists(settings_path):
+            try:
+                import json
+                with open(settings_path, "r") as f:
+                    settings = json.load(f)
+                    prediction_mode = settings.get("prediction_mode", "automatic")
+            except Exception:
+                pass
+
         # Filter for valid events (exclude false positives and unconfirmed live events)
         valid_events = []
         for e in species_events:
@@ -27,15 +40,23 @@ class StatisticalPredictor:
             
         # Count live valid events
         live_events = [e for e in valid_events if e.source == "live"]
+        seed_events = [e for e in valid_events if e.source == "seed"]
         
-        MIN_LIVE_EVENTS = 15
-        
-        if len(live_events) >= MIN_LIVE_EVENTS:
+        # Decide which events to use based on prediction_mode
+        if prediction_mode == "seed_only":
+            calculation_events = seed_events
+            data_source = "seed"
+        elif prediction_mode == "live_only":
             calculation_events = live_events
             data_source = "live"
-        else:
-            calculation_events = valid_events
-            data_source = "seed"
+        else:  # "automatic" (Hybrid 15-event threshold)
+            MIN_LIVE_EVENTS = 15
+            if len(live_events) >= MIN_LIVE_EVENTS:
+                calculation_events = live_events
+                data_source = "live"
+            else:
+                calculation_events = valid_events
+                data_source = "seed"
             
         if len(calculation_events) < 5:
             return {

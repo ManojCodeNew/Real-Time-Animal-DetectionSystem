@@ -1,46 +1,48 @@
 {
-    "wild_boar": {
-        "species": "wild_boar",
-        "status": "success",
-        "predicted_time": "2026-07-13 02:34:00",
-        "confidence_percentage": 85.2,
-        "historical_data_points_used": 47,
-        "live_events_count": 0,
-        "peak_activity_window": "02:00 - 02:59",
-        "data_maturity": "seed",
-        "is_within_30h": true
-    },
     "elephant": {
         "species": "elephant",
-        "status": "success",
-        "predicted_time": "2026-07-13 04:30:00",
-        "confidence_percentage": 84.8,
-        "historical_data_points_used": 56,
+        "status": "insufficient_data",
+        "message": "Need at least 5 historical events to predict.",
         "live_events_count": 2,
-        "peak_activity_window": "04:00 - 04:59",
-        "data_maturity": "seed",
-        "is_within_30h": true
+        "data_maturity": "live",
+        "is_within_30h": false
+    },
+    "wild_boar": {
+        "species": "wild_boar",
+        "status": "insufficient_data",
+        "message": "Need at least 5 historical events to predict.",
+        "live_events_count": 1,
+        "data_maturity": "live",
+        "is_within_30h": false
     },
     "macaque": {
         "species": "macaque",
-        "status": "success",
-        "predicted_time": "2026-07-13 11:22:00",
-        "confidence_percentage": 86.7,
-        "historical_data_points_used": 42,
-        "live_events_count": 0,
-        "peak_activity_window": "11:00 - 11:59",
-        "data_maturity": "seed",
-        "is_within_30h": true
+        "status": "insufficient_data",
+        "message": "Need at least 5 historical events to predict.",
+        "live_events_count": 2,
+        "data_maturity": "live",
+        "is_within_30h": false
     },
     "nilgai": {
         "species": "nilgai",
         "status": "success",
-        "predicted_time": "2026-07-12 19:23:00",
+        "predicted_time": "2026-07-13 19:23:00",
         "confidence_percentage": 81.3,
         "historical_data_points_used": 57,
         "live_events_count": 0,
         "peak_activity_window": "19:00 - 19:59",
         "data_maturity": "seed",
+        "is_within_30h": true
+    },
+    "test_owl": {
+        "species": "test_owl",
+        "status": "success",
+        "predicted_time": "2026-07-13 01:30:00",
+        "confidence_percentage": 95.0,
+        "historical_data_points_used": 15,
+        "live_events_count": 15,
+        "peak_activity_window": "01:00 - 01:59",
+        "data_maturity": "live",
         "is_within_30h": true
     }
 }

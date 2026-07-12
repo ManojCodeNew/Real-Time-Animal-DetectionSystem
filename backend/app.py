@@ -27,10 +27,13 @@ def load_settings():
     if os.path.exists(SETTINGS_FILE):
         try:
             with open(SETTINGS_FILE, "r") as f:
-                return json.load(f)
+                settings = json.load(f)
+                if "prediction_mode" not in settings:
+                    settings["prediction_mode"] = "automatic"
+                return settings
         except Exception:
             pass
-    return {"email": "farmer@example.com", "notifications_enabled": True}
+    return {"email": "farmer@example.com", "notifications_enabled": True, "prediction_mode": "automatic"}
 
 def save_settings(settings):
     with open(SETTINGS_FILE, "w") as f:
@@ -170,7 +173,7 @@ def post_feedback(id):
     finally:
         db.close()
 
-# 4. GET /api/notifications - In-site notification feed of live alerts
+# 4. GET /api/notifications - In-site notification feed of live alerts & predictive alerts
 @app.route("/api/notifications", methods=["GET"])
 def get_notifications():
     db = SessionLocal()
@@ -184,6 +187,31 @@ def get_notifications():
             .all()
             
         notifications = []
+        now = datetime.now()
+        
+        # 1. Fetch upcoming predictive warnings (within next 30 minutes)
+        forecasts_file = os.path.join(script_dir, "data", "forecasts.json")
+        if os.path.exists(forecasts_file):
+            try:
+                with open(forecasts_file, "r") as f:
+                    forecasts = json.load(f)
+                for sp, pred in forecasts.items():
+                    if pred.get("status") == "success" and pred.get("predicted_time"):
+                        pred_time = datetime.strptime(pred["predicted_time"], "%Y-%m-%d %H:%M:%S")
+                        time_diff = (pred_time - now).total_seconds() / 60.0
+                        if 0 <= time_diff <= 30.0:
+                            notifications.append({
+                                "id": f"pred_{sp}_{pred['predicted_time']}",
+                                "message": f"PREDICTIVE WARNING: {sp.replace('_', ' ').capitalize()} arrival predicted in {int(time_diff)} minutes ({pred['predicted_time']})!",
+                                "time": now.strftime("%Y-%m-%d %H:%M:%S"),
+                                "brightness_path": "warning",
+                                "confidence": pred["confidence_percentage"] / 100.0,
+                                "email_sent": True
+                            })
+            except Exception as e:
+                print("Error calculating onsite predictive notifications:", e)
+
+        # 2. Append live intrusion events
         for e in events:
             notifications.append({
                 "id": e.id,
@@ -191,18 +219,22 @@ def get_notifications():
                 "time": e.entry_time.strftime("%Y-%m-%d %H:%M:%S"),
                 "brightness_path": e.brightness_path,
                 "confidence": e.confidence_score,
-                "email_sent": True  # In our simulated layer, we send an email notification as well
+                "email_sent": True
             })
-        return jsonify(notifications)
+            
+        # Sort notifications by time descending
+        notifications = sorted(notifications, key=lambda x: x["time"], reverse=True)
+        return jsonify(notifications[:20])
     finally:
         db.close()
 
-# 5. POST /api/settings/email - Save or toggle email notification address
+# 5. POST /api/settings/email - Save or toggle settings
 @app.route("/api/settings/email", methods=["POST"])
 def post_email_setting():
     data = request.json or {}
     email = data.get("email")
     enabled = data.get("enabled", True)
+    prediction_mode = data.get("prediction_mode", "automatic")
     
     if not email:
         return jsonify({"error": "email parameter is required"}), 400
@@ -210,17 +242,58 @@ def post_email_setting():
     settings = load_settings()
     settings["email"] = email
     settings["notifications_enabled"] = enabled
+    settings["prediction_mode"] = prediction_mode
     save_settings(settings)
     
     # Simulate writing email log registration
     email_log = os.path.join(script_dir, "data", "email_notifications.log")
     with open(email_log, "a") as f:
-         f.write(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Settings Updated: Alerts enabled for {email}\n")
+         f.write(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Settings Updated: Alerts enabled for {email}. Prediction mode: {prediction_mode}\n")
          
     return jsonify({
         "message": "Email settings saved successfully",
         "settings": settings
     })
+
+# 6. Camera Pipeline Control endpoints (Phase 6 Detection stream)
+from core.camera_manager import CameraStreamManager
+from flask import Response
+
+@app.route("/api/camera/start", methods=["POST"])
+def start_camera():
+    active = CameraStreamManager.get_instance().start()
+    return jsonify({"message": "Camera pipeline activated", "active": active})
+
+@app.route("/api/camera/stop", methods=["POST"])
+def stop_camera():
+    CameraStreamManager.get_instance().stop()
+    return jsonify({"message": "Camera pipeline deactivated", "active": False})
+
+@app.route("/api/camera/status", methods=["GET"])
+def get_camera_status():
+    active = CameraStreamManager.get_instance().get_status()
+    return jsonify({"active": active})
+
+@app.route("/api/camera/stream", methods=["GET"])
+def camera_stream():
+    manager = CameraStreamManager.get_instance()
+    
+    # If not active, return standard offline placeholder image
+    if not manager.get_status():
+        placeholder = np.zeros((480, 640, 3), dtype=np.uint8)
+        cv2.putText(placeholder, "CAMERA FEED OFFLINE", (140, 250), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 2)
+        cv2.putText(placeholder, "Click 'Start Live Feed' to active YOLOv8 detection.", (80, 290), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+        ret, jpeg = cv2.imencode('.jpg', placeholder)
+        return Response(jpeg.tobytes(), mimetype='image/jpeg')
+        
+    def gen():
+        while manager.get_status():
+            frame = manager.get_frame()
+            if frame:
+                yield (b'--frame\r\n'
+                       b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+            time.sleep(0.04)  # ~25 FPS streaming
+    return Response(gen(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 # Serve captured image crops for the Detection Gallery
 @app.route("/api/images/<path:filename>", methods=["GET"])
@@ -230,19 +303,43 @@ def get_image(filename):
         os.makedirs(directory, exist_ok=True)
     return send_from_directory(directory, filename)
 
-# Background scheduler daemon for hourly prediction recalculation
+# Background scheduler daemon for 30m predictive alerts check (Phase 5)
 import threading
 import time
 
 def start_forecast_scheduler():
     def run_scheduler():
+        # Keep track of warnings sent to avoid repeated spamming
+        sent_warnings = set()
+        
         while True:
-            time.sleep(3600)  # Every hour
-            print("[SCHEDULER] Running scheduled hourly forecast recalculation...")
+            time.sleep(60)  # Check predictions every 60 seconds
             db = SessionLocal()
             try:
-                from core.forecasting_engine import recalculate_all
-                recalculate_all(db)
+                now = datetime.now()
+                settings = load_settings()
+                if not settings.get("notifications_enabled", True):
+                    continue
+                    
+                forecasts_file = os.path.join(script_dir, "data", "forecasts.json")
+                if os.path.exists(forecasts_file):
+                    with open(forecasts_file, "r") as f:
+                        forecasts = json.load(f)
+                        
+                    for sp, pred in forecasts.items():
+                        if pred.get("status") == "success" and pred.get("predicted_time"):
+                            pred_time = datetime.strptime(pred["predicted_time"], "%Y-%m-%d %H:%M:%S")
+                            time_diff = (pred_time - now).total_seconds() / 60.0
+                            
+                            # Trigger email alert warning 30 minutes before expected arrival
+                            if 28.5 <= time_diff <= 30.5:
+                                warn_key = f"{sp}_{pred['predicted_time']}"
+                                if warn_key not in sent_warnings:
+                                    sent_warnings.add(warn_key)
+                                    
+                                    # Log the forecast warning email (Gap 1 alert)
+                                    from core.notifications import log_forecast_alert
+                                    log_forecast_alert(sp, pred["predicted_time"], pred["confidence_percentage"], pred["peak_activity_window"])
             except Exception as e:
                 print("[SCHEDULER] Error during scheduled recalculation:", e)
             finally:
