@@ -170,6 +170,13 @@ def run_pipeline(video_path=None, test_simulate=False):
                             "brightnesses": [brightness],
                             "brightness_paths": [b_path]
                         }
+                        
+                        # Simulated email alert (Phase 5)
+                        try:
+                            from core.notifications import log_detection_alert
+                            log_detection_alert(species, track_id, current_time, brightness, conf)
+                        except Exception as e:
+                            print(f"Warning: could not send email alert: {e}")
                     else:
                         # Update active track statistics
                         track = active_tracks[track_id]
@@ -192,6 +199,13 @@ def run_pipeline(video_path=None, test_simulate=False):
                     "brightnesses": [brightness],
                     "brightness_paths": [b_path]
                 }
+                
+                # Simulated email alert (Phase 5)
+                try:
+                    from core.notifications import log_detection_alert
+                    log_detection_alert("elephant", mock_id, current_time - timedelta(seconds=10), brightness, 0.85)
+                except Exception as e:
+                    print(f"Warning: could not send email alert: {e}")
             elif test_simulate and frame_idx > 5 and 999 in active_tracks:
                 # Keep active until frame 20, then stop updating so it times out and closes
                 if frame_idx <= 20:

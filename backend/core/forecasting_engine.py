@@ -34,6 +34,14 @@ def recalculate(species_name, db):
         pred_time = datetime.strptime(pred["predicted_time"], "%Y-%m-%d %H:%M:%S")
         now = datetime.now()
         pred["is_within_30h"] = now <= pred_time <= (now + timedelta(hours=30))
+        
+        # Simulated email alert for forecast within next 30h (Phase 5)
+        if pred["is_within_30h"]:
+            try:
+                from core.notifications import log_forecast_alert
+                log_forecast_alert(species_name, pred["predicted_time"], pred["confidence_percentage"], pred["peak_activity_window"])
+            except Exception as e:
+                print(f"Warning: could not send forecast email: {e}")
     else:
         pred["is_within_30h"] = False
         
