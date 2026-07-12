@@ -233,6 +233,13 @@ def run_pipeline(video_path=None, test_simulate=False):
                     brightness=round(mean_brightness, 2),
                     brightness_path=b_path_mode
                 )
+                
+                # Recalculate forecast for this species inline (Phase 3)
+                try:
+                    from core.forecasting_engine import recalculate
+                    recalculate(track["species"], db)
+                except Exception as e:
+                    print(f"Warning: could not recalculate forecast: {e}")
             
             frame_idx += 1
             # Control frame rate slightly for simulated run
