@@ -15,8 +15,8 @@
         "status": "success",
         "predicted_time": "2026-07-13 04:30:00",
         "confidence_percentage": 84.8,
-        "historical_data_points_used": 54,
-        "live_events_count": 0,
+        "historical_data_points_used": 56,
+        "live_events_count": 2,
         "peak_activity_window": "04:00 - 04:59",
         "data_maturity": "seed",
         "is_within_30h": true
