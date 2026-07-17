@@ -304,14 +304,15 @@ class CameraStreamManager:
                     self.active = False
                     break
                     
-                # Handle manual window close button [X]
-                try:
-                    if cv2.getWindowProperty(window_title, cv2.WND_PROP_VISIBLE) < 1:
-                        print("[CAMERA MANAGER] Native window was closed by the user.")
-                        self.active = False
-                        break
-                except Exception:
-                    pass
+                # Handle manual window close button [X] (skip first 30 frames to allow window warming up)
+                if frame_idx > 30:
+                    try:
+                        if cv2.getWindowProperty(window_title, cv2.WND_PROP_VISIBLE) < 1:
+                            print("[CAMERA MANAGER] Native window was closed by the user.")
+                            self.active = False
+                            break
+                    except Exception:
+                        pass
                 
                 time.sleep(0.03)  # Loop delay (~30 FPS)
                 

@@ -273,3 +273,144 @@ Please prepare active deterrents or secure crop boundaries for the scheduled hou
 
 [2026-07-17 15:53:07] Settings Updated: Alerts enabled for test_recipient@example.com. SMTP config updated.
 [2026-07-17 15:54:19] Settings Updated: Alerts enabled for farmer@example.com. SMTP config updated.
+======================================================================
+TIMESTAMP : 2026-07-17 16:02:25
+TO        : farmer@example.com
+SUBJECT   : [ALERT] Live MACAQUE detected at farm boundaries! (Track #1)
+----------------------------------------------------------------------
+Alert: An animal intrusion event has occurred.
+
+Species           : Macaque
+Tracker ID        : #1
+Detection Time    : 2026-07-17 16:02:25
+Sensor Brightness : 69.4 Lux
+YOLO Confidence   : 63.9%
+
+Please review this alert in the FarmGuard Console and confirm if it is correct.
+======================================================================
+
+======================================================================
+TIMESTAMP : 2026-07-17 16:03:06
+TO        : farmer@example.com
+SUBJECT   : [ALERT] Live MACAQUE detected at farm boundaries! (Track #1)
+----------------------------------------------------------------------
+Alert: An animal intrusion event has occurred.
+
+Species           : Macaque
+Tracker ID        : #1
+Detection Time    : 2026-07-17 16:03:06
+Sensor Brightness : 75.6 Lux
+YOLO Confidence   : 74.9%
+
+Please review this alert in the FarmGuard Console and confirm if it is correct.
+======================================================================
+
+======================================================================
+TIMESTAMP : 2026-07-17 16:03:10
+TO        : farmer@example.com
+SUBJECT   : [ALERT] Live MACAQUE detected at farm boundaries! (Track #3)
+----------------------------------------------------------------------
+Alert: An animal intrusion event has occurred.
+
+Species           : Macaque
+Tracker ID        : #3
+Detection Time    : 2026-07-17 16:03:10
+Sensor Brightness : 106.5 Lux
+YOLO Confidence   : 80.8%
+
+Please review this alert in the FarmGuard Console and confirm if it is correct.
+======================================================================
+
+======================================================================
+TIMESTAMP : 2026-07-17 16:03:15
+TO        : farmer@example.com
+SUBJECT   : [ALERT] Live MACAQUE detected at farm boundaries! (Track #7)
+----------------------------------------------------------------------
+Alert: An animal intrusion event has occurred.
+
+Species           : Macaque
+Tracker ID        : #7
+Detection Time    : 2026-07-17 16:03:15
+Sensor Brightness : 67.5 Lux
+YOLO Confidence   : 70.4%
+
+Please review this alert in the FarmGuard Console and confirm if it is correct.
+======================================================================
+
+======================================================================
+TIMESTAMP : 2026-07-17 16:03:18
+TO        : farmer@example.com
+SUBJECT   : [FORECAST] Predicted MACAQUE arrival window within next 30h!
+----------------------------------------------------------------------
+Predictive Warning: An animal is expected to arrive soon.
+
+Species           : Macaque
+Expected Time     : 2026-07-18 11:22:00
+AI Peak Window    : 11:00 - 11:59
+Predictability    : 86.7%
+
+Please prepare active deterrents or secure crop boundaries for the scheduled hour.
+======================================================================
+
+======================================================================
+TIMESTAMP : 2026-07-17 16:03:22
+TO        : farmer@example.com
+SUBJECT   : [FORECAST] Predicted MACAQUE arrival window within next 30h!
+----------------------------------------------------------------------
+Predictive Warning: An animal is expected to arrive soon.
+
+Species           : Macaque
+Expected Time     : 2026-07-18 11:22:00
+AI Peak Window    : 11:00 - 11:59
+Predictability    : 86.7%
+
+Please prepare active deterrents or secure crop boundaries for the scheduled hour.
+======================================================================
+
+======================================================================
+TIMESTAMP : 2026-07-17 16:03:27
+TO        : farmer@example.com
+SUBJECT   : [ALERT] Live MACAQUE detected at farm boundaries! (Track #10)
+----------------------------------------------------------------------
+Alert: An animal intrusion event has occurred.
+
+Species           : Macaque
+Tracker ID        : #10
+Detection Time    : 2026-07-17 16:03:27
+Sensor Brightness : 102.3 Lux
+YOLO Confidence   : 78.9%
+
+Please review this alert in the FarmGuard Console and confirm if it is correct.
+======================================================================
+
+======================================================================
+TIMESTAMP : 2026-07-17 16:03:31
+TO        : farmer@example.com
+SUBJECT   : [FORECAST] Predicted MACAQUE arrival window within next 30h!
+----------------------------------------------------------------------
+Predictive Warning: An animal is expected to arrive soon.
+
+Species           : Macaque
+Expected Time     : 2026-07-18 11:22:00
+AI Peak Window    : 11:00 - 11:59
+Predictability    : 86.7%
+
+Please prepare active deterrents or secure crop boundaries for the scheduled hour.
+======================================================================
+
+======================================================================
+TIMESTAMP : 2026-07-17 16:03:34
+TO        : farmer@example.com
+SUBJECT   : [ALERT] Live WILD BOAR detected at farm boundaries! (Track #10)
+----------------------------------------------------------------------
+Alert: An animal intrusion event has occurred.
+
+Species           : Wild boar
+Tracker ID        : #10
+Detection Time    : 2026-07-17 16:03:34
+Sensor Brightness : 93.5 Lux
+YOLO Confidence   : 51.6%
+
+Please review this alert in the FarmGuard Console and confirm if it is correct.
+======================================================================
+
