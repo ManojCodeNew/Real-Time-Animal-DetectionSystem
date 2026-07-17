@@ -238,7 +238,9 @@ class CameraStreamManager:
                                     "last_seen": current_time,
                                     "confidences": [conf],
                                     "brightnesses": [brightness],
-                                    "brightness_paths": [b_path]
+                                    "brightness_paths": [b_path],
+                                    "best_frame": annotated_frame.copy() if annotated_frame is not None else None,
+                                    "best_conf": conf
                                 }
                                 
                                 # Send immediate alerts (Phase 5 email logger)
@@ -253,6 +255,9 @@ class CameraStreamManager:
                                 track["confidences"].append(conf)
                                 track["brightnesses"].append(brightness)
                                 track["brightness_paths"].append(b_path)
+                                if conf > track.get("best_conf", 0):
+                                    track["best_conf"] = conf
+                                    track["best_frame"] = annotated_frame.copy() if annotated_frame is not None else None
                 
                 self.active_tracks_count = len(self.active_tracks)
                 
@@ -270,6 +275,23 @@ class CameraStreamManager:
                     from collections import Counter
                     b_path_mode = Counter(track["brightness_paths"]).most_common(1)[0][0]
                     
+                    # Save the screenshot of the best frame
+                    saved_img_path = b_path_mode
+                    try:
+                        script_dir = os.path.dirname(os.path.abspath(__file__))
+                        img_dir = os.path.join(os.path.dirname(script_dir), "data", "detections")
+                        os.makedirs(img_dir, exist_ok=True)
+                        time_str = track["entry_time"].strftime("%Y%m%d_%H%M%S")
+                        filename = f"{track['species']}_{time_str}_track{tid}.jpg"
+                        filepath = os.path.join(img_dir, filename)
+                        
+                        if "best_frame" in track and track["best_frame"] is not None:
+                            cv2.imwrite(filepath, track["best_frame"])
+                            saved_img_path = f"/api/detections/image/{filename}"
+                            print(f"[CAMERA EVENT] Saved detection screenshot to: {filepath}")
+                    except Exception as img_err:
+                        print(f"Warning: could not save detection image: {img_err}")
+                    
                     print(f"[CAMERA EXIT] Track {tid}: {track['species']} left. Duration: {(track['last_seen'] - track['entry_time']).total_seconds():.1f}s. Logging to DB...")
                     
                     # Transactional Database write
@@ -285,7 +307,7 @@ class CameraStreamManager:
                         confirmed=None,
                         status="active",
                         brightness=round(mean_brightness, 2),
-                        brightness_path=b_path_mode
+                        brightness_path=saved_img_path
                     )
                     
                     # Recalculate predictions

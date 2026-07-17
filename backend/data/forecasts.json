@@ -4,8 +4,8 @@
         "status": "success",
         "predicted_time": "2026-07-18 04:30:00",
         "confidence_percentage": 84.8,
-        "historical_data_points_used": 59,
-        "live_events_count": 5,
+        "historical_data_points_used": 60,
+        "live_events_count": 6,
         "peak_activity_window": "04:00 - 04:59",
         "data_maturity": "seed",
         "is_within_30h": true
@@ -13,29 +13,29 @@
     "wild_boar": {
         "species": "wild_boar",
         "status": "success",
-        "predicted_time": "2026-07-18 02:34:00",
-        "confidence_percentage": 84.9,
-        "historical_data_points_used": 47,
-        "live_events_count": 1,
-        "peak_activity_window": "02:00 - 02:59",
-        "data_maturity": "seed",
+        "predicted_time": "2026-07-18 01:31:00",
+        "confidence_percentage": 88.7,
+        "historical_data_points_used": 5,
+        "live_events_count": 0,
+        "peak_activity_window": "01:00 - 01:59",
+        "data_maturity": "hybrid",
         "is_within_30h": true
     },
     "macaque": {
         "species": "macaque",
         "status": "success",
-        "predicted_time": "2026-07-18 11:22:00",
-        "confidence_percentage": 86.7,
-        "historical_data_points_used": 45,
-        "live_events_count": 2,
-        "peak_activity_window": "11:00 - 11:59",
-        "data_maturity": "seed",
+        "predicted_time": "2026-07-18 12:55:00",
+        "confidence_percentage": 95.0,
+        "historical_data_points_used": 5,
+        "live_events_count": 0,
+        "peak_activity_window": "12:00 - 12:59",
+        "data_maturity": "hybrid",
         "is_within_30h": true
     },
     "nilgai": {
         "species": "nilgai",
         "status": "success",
-        "predicted_time": "2026-07-13 19:23:00",
+        "predicted_time": "2026-07-17 19:23:00",
         "confidence_percentage": 81.3,
         "historical_data_points_used": 57,
         "live_events_count": 0,
@@ -59,7 +59,7 @@
         "status": "insufficient_data",
         "message": "Need at least 5 historical events to predict.",
         "live_events_count": 0,
-        "data_maturity": "seed",
+        "data_maturity": "hybrid",
         "is_within_30h": false
     }
 }

@@ -16,6 +16,22 @@ from core.prediction import StatisticalPredictor
 # Initialize tables
 models.Base.metadata.create_all(bind=engine)
 
+# Programmatic database bootstrap hook
+def bootstrap_database_if_empty():
+    db = SessionLocal()
+    try:
+        event_count = db.query(models.IntrusionEvent).count()
+        if event_count == 0:
+            print("[BOOTSTRAP] Database is empty. Creating minimal bootstrap historical data...")
+            from core.bootstrap import create_bootstrap_records
+            create_bootstrap_records(db)
+    except Exception as e:
+        print("[BOOTSTRAP ERROR] Failed to initialize bootstrap data:", e)
+    finally:
+        db.close()
+
+bootstrap_database_if_empty()
+
 app = Flask(__name__)
 CORS(app)  # Allow React frontend to connect
 
@@ -134,6 +150,8 @@ def post_feedback(id):
         if not event:
             return jsonify({"error": "Event not found"}), 404
             
+        old_species_name = event.species.name
+            
         if confirmed is True:
             # User confirmed the AI classification was correct
             event.confirmed = True
@@ -161,7 +179,9 @@ def post_feedback(id):
         # Recalculate forecast for this species using Phase 3 engine
         from core.forecasting_engine import recalculate
         updated_forecast = recalculate(event.species.name, db)
-        
+        if old_species_name != event.species.name:
+            recalculate(old_species_name, db)
+            
         return jsonify({
             "message": "Feedback submitted and forecast updated successfully",
             "event_id": event.id,
@@ -233,6 +253,13 @@ def get_notifications():
 def get_settings():
     return jsonify(load_settings())
 
+# GET /api/detections/image/<filename> - Serve saved animal intrusion photos
+@app.route("/api/detections/image/<filename>", methods=["GET"])
+def get_detection_image(filename):
+    from flask import send_from_directory
+    detections_dir = os.path.join(script_dir, "data", "detections")
+    return send_from_directory(detections_dir, filename)
+
 # POST /api/settings/email - Save or toggle settings
 @app.route("/api/settings/email", methods=["POST"])
 def post_email_setting():
@@ -246,6 +273,7 @@ def post_email_setting():
     smtp_password = data.get("smtp_password", "")
     smtp_host = data.get("smtp_host", "smtp.gmail.com")
     smtp_port = data.get("smtp_port", 587)
+    min_live_events = data.get("min_live_events", 10)
     
     if not email:
         return jsonify({"error": "email parameter is required"}), 400
@@ -254,6 +282,7 @@ def post_email_setting():
     settings["email"] = email
     settings["notifications_enabled"] = enabled
     settings["prediction_mode"] = prediction_mode
+    settings["min_live_events"] = int(min_live_events)
     
     # Save SMTP keys
     settings["smtp_sender"] = smtp_sender
@@ -359,4 +388,4 @@ def start_forecast_scheduler():
 start_forecast_scheduler()
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8000, debug=True)
+    app.run(host="0.0.0.0", port=8000, debug=True, use_reloader=False)

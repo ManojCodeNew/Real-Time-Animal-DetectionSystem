@@ -40,23 +40,40 @@ class StatisticalPredictor:
             
         # Count live valid events
         live_events = [e for e in valid_events if e.source == "live"]
+        bootstrap_events = [e for e in valid_events if e.source == "bootstrap"]
+        # Retain seed_events support for backward compatibility with old databases
         seed_events = [e for e in valid_events if e.source == "seed"]
         
+        # Determine the fallback baseline events
+        baseline_events = bootstrap_events if len(bootstrap_events) > 0 else seed_events
+        baseline_source_name = "bootstrap" if len(bootstrap_events) > 0 else "seed"
+
         # Decide which events to use based on prediction_mode
-        if prediction_mode == "seed_only":
-            calculation_events = seed_events
-            data_source = "seed"
+        if prediction_mode in ["seed_only", "bootstrap_only"]:
+            calculation_events = baseline_events
+            data_source = baseline_source_name
         elif prediction_mode == "live_only":
             calculation_events = live_events
             data_source = "live"
-        else:  # "automatic" (Hybrid 15-event threshold)
-            MIN_LIVE_EVENTS = 15
+        else:  # "automatic" (Hybrid threshold transition)
+            # Read transition threshold from settings.json if present, default to 10
+            MIN_LIVE_EVENTS = 10
+            settings_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "settings.json")
+            if os.path.exists(settings_path):
+                try:
+                    import json
+                    with open(settings_path, "r") as f:
+                        settings = json.load(f)
+                        MIN_LIVE_EVENTS = int(settings.get("min_live_events", 10))
+                except Exception:
+                    pass
+                    
             if len(live_events) >= MIN_LIVE_EVENTS:
                 calculation_events = live_events
                 data_source = "live"
             else:
-                calculation_events = valid_events
-                data_source = "seed"
+                calculation_events = live_events + baseline_events
+                data_source = "hybrid"
             
         if len(calculation_events) < 5:
             return {
