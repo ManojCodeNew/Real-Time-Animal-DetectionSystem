@@ -228,13 +228,24 @@ def get_notifications():
     finally:
         db.close()
 
-# 5. POST /api/settings/email - Save or toggle settings
+# 5. GET /api/settings - Fetch current settings configurations
+@app.route("/api/settings", methods=["GET"])
+def get_settings():
+    return jsonify(load_settings())
+
+# POST /api/settings/email - Save or toggle settings
 @app.route("/api/settings/email", methods=["POST"])
 def post_email_setting():
     data = request.json or {}
     email = data.get("email")
     enabled = data.get("enabled", True)
     prediction_mode = data.get("prediction_mode", "automatic")
+    
+    # SMTP configs
+    smtp_sender = data.get("smtp_sender", "")
+    smtp_password = data.get("smtp_password", "")
+    smtp_host = data.get("smtp_host", "smtp.gmail.com")
+    smtp_port = data.get("smtp_port", 587)
     
     if not email:
         return jsonify({"error": "email parameter is required"}), 400
@@ -243,15 +254,22 @@ def post_email_setting():
     settings["email"] = email
     settings["notifications_enabled"] = enabled
     settings["prediction_mode"] = prediction_mode
+    
+    # Save SMTP keys
+    settings["smtp_sender"] = smtp_sender
+    settings["smtp_password"] = smtp_password
+    settings["smtp_host"] = smtp_host
+    settings["smtp_port"] = smtp_port
+    
     save_settings(settings)
     
     # Simulate writing email log registration
     email_log = os.path.join(script_dir, "data", "email_notifications.log")
     with open(email_log, "a") as f:
-         f.write(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Settings Updated: Alerts enabled for {email}. Prediction mode: {prediction_mode}\n")
+         f.write(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Settings Updated: Alerts enabled for {email}. SMTP config updated.\n")
          
     return jsonify({
-        "message": "Email settings saved successfully",
+        "message": "Email and SMTP settings saved successfully",
         "settings": settings
     })
 

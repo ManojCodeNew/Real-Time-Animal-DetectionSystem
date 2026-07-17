@@ -1,5 +1,9 @@
 {
-    "email": "test@example.com",
+    "email": "farmer@example.com",
     "notifications_enabled": true,
-    "prediction_mode": "automatic"
+    "prediction_mode": "automatic",
+    "smtp_sender": "manojpoojary2004@gmail.com",
+    "smtp_password": "sjbq llcd pjwp qhsh",
+    "smtp_host": "smtp.gmail.com",
+    "smtp_port": 587
 }

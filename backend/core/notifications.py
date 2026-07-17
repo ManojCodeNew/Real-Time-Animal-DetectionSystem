@@ -50,15 +50,41 @@ def rotate_logs():
     print(f"[LOG ROTATION] Rolled over active log to {dst}")
 
 def send_email_notification(subject, body):
-    """Simulates sending an email by appending it to the log file with rotation."""
+    """Sends a real email using SMTP if configured, otherwise falls back to logging."""
+    import smtplib
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+
     os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
-    
-    # Apply rotation checks
     rotate_logs()
     
-    recipient = get_recipient_email()
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    # Load settings dynamically
+    settings = {}
+    if os.path.exists(SETTINGS_FILE):
+        try:
+            with open(SETTINGS_FILE, "r") as f:
+                settings = json.load(f)
+        except Exception:
+            pass
+            
+    recipient = settings.get("email", "farmer@example.com")
+    enabled = settings.get("notifications_enabled", True)
     
+    if not enabled:
+        print("[EMAIL] Notifications are disabled in settings.")
+        return
+
+    sender_email = settings.get("smtp_sender")
+    app_password = settings.get("smtp_password")
+    smtp_host = settings.get("smtp_host", "smtp.gmail.com")
+    
+    try:
+        smtp_port = int(settings.get("smtp_port", 587))
+    except (ValueError, TypeError):
+        smtp_port = 587
+
+    # Always log locally first for historical audits
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     log_entry = f"======================================================================\n"
     log_entry += f"TIMESTAMP : {timestamp}\n"
     log_entry += f"TO        : {recipient}\n"
@@ -69,8 +95,26 @@ def send_email_notification(subject, body):
     
     with open(LOG_FILE, "a") as f:
         f.write(log_entry)
-        
-    print(f"[EMAIL SIMULATION] Appended email warning to logs. Subject: {subject}")
+
+    # Send real email if configured
+    if sender_email and app_password:
+        try:
+            msg = MIMEMultipart()
+            msg['From'] = sender_email
+            msg['To'] = recipient
+            msg['Subject'] = subject
+            msg.attach(MIMEText(body, 'plain'))
+
+            server = smtplib.SMTP(smtp_host, smtp_port)
+            server.starttls()
+            server.login(sender_email, app_password)
+            server.sendmail(sender_email, recipient, msg.as_string())
+            server.quit()
+            print(f"[EMAIL] Real email alert dispatched successfully to {recipient}")
+        except Exception as e:
+            print(f"[EMAIL ERROR] Failed to send real SMTP email: {e}")
+    else:
+        print(f"[EMAIL SIMULATION] Appended email warning to logs (SMTP not configured). Subject: {subject}")
 
 def log_detection_alert(species, tracker_id, detect_time, brightness, confidence):
     """Formats and sends a simulated email warning for a new boundary intrusion."""

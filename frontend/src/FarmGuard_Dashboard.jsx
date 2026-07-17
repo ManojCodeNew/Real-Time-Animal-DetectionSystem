@@ -16,7 +16,11 @@ function FarmGuard_Dashboard() {
   const [emailSettings, setEmailSettings] = useState({ 
     email: 'farmer@example.com', 
     enabled: true,
-    prediction_mode: 'automatic'
+    prediction_mode: 'automatic',
+    smtp_sender: '',
+    smtp_password: '',
+    smtp_host: 'smtp.gmail.com',
+    smtp_port: 587
   });
   const [loading, setLoading] = useState(true);
   
@@ -97,14 +101,20 @@ function FarmGuard_Dashboard() {
       setNotifications(notifRes.data);
       setCameraStatus(camRes.data);
       
-      // Attempt to load settings
-      // In Flask, settings are served in the response to settings save,
-      // let's preset email settings based on recent mock warning recipients
-      if (notifRes.data.length > 0) {
-        setEmailSettings(prev => ({
-          ...prev,
-          email: notifRes.data[0].email || 'farmer@example.com'
-        }));
+      // Load settings dynamically from settings endpoint
+      try {
+        const settingsRes = await axios.get(`${API_BASE}/settings`);
+        setEmailSettings({
+          email: settingsRes.data.email || 'farmer@example.com',
+          enabled: settingsRes.data.notifications_enabled !== undefined ? settingsRes.data.notifications_enabled : true,
+          prediction_mode: settingsRes.data.prediction_mode || 'automatic',
+          smtp_sender: settingsRes.data.smtp_sender || '',
+          smtp_password: settingsRes.data.smtp_password || '',
+          smtp_host: settingsRes.data.smtp_host || 'smtp.gmail.com',
+          smtp_port: settingsRes.data.smtp_port || 587
+        });
+      } catch (err) {
+        console.error("Error loading email configurations:", err);
       }
     } catch (error) {
       console.error("Error fetching console data:", error);
@@ -833,8 +843,10 @@ function FarmGuard_Dashboard() {
         <div className="panel" style={{ maxWidth: '600px', margin: '0 auto' }}>
           <h2 className="panel-title">FarmGuard Console Settings Manager</h2>
           <form onSubmit={handleSaveSettings} className="settings-form">
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 700, borderBottom: '1px solid var(--surface-border)', paddingBottom: '0.5rem', marginBottom: '1rem', color: 'var(--primary-color)' }}>General Configurations</h3>
+            
             <div className="form-group">
-              <label>Notification Email Address</label>
+              <label>Recipient Email Address (Where alerts are sent)</label>
               <input 
                 type="email" 
                 className="form-input" 
@@ -871,7 +883,55 @@ function FarmGuard_Dashboard() {
               </select>
             </div>
 
-            <button type="submit" className="header-btn btn-primary" style={{ alignSelf: 'flex-start', marginTop: '1.5rem' }}>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 700, borderBottom: '1px solid var(--surface-border)', paddingBottom: '0.5rem', marginTop: '2rem', marginBottom: '1rem', color: 'var(--primary-color)' }}>SMTP Email Dispatch Configurations</h3>
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
+              Fill in your Gmail credentials to enable real-time boundary intrusion emails. To connect securely, you must generate a <strong>Google App Password</strong> from your Google Account settings.
+            </p>
+
+            <div className="form-group">
+              <label>SMTP Sender Email Address (Your Gmail)</label>
+              <input 
+                type="email" 
+                className="form-input" 
+                placeholder="e.g. your_gmail@gmail.com"
+                value={emailSettings.smtp_sender}
+                onChange={(e) => setEmailSettings({ ...emailSettings, smtp_sender: e.target.value })}
+              />
+            </div>
+
+            <div className="form-group" style={{ marginTop: '1rem' }}>
+              <label>Google App Password (16-character code)</label>
+              <input 
+                type="password" 
+                className="form-input" 
+                placeholder="e.g. xxxx xxxx xxxx xxxx"
+                value={emailSettings.smtp_password}
+                onChange={(e) => setEmailSettings({ ...emailSettings, smtp_password: e.target.value })}
+              />
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1rem', marginTop: '1rem' }}>
+              <div className="form-group">
+                <label>SMTP Host</label>
+                <input 
+                  type="text" 
+                  className="form-input" 
+                  value={emailSettings.smtp_host}
+                  onChange={(e) => setEmailSettings({ ...emailSettings, smtp_host: e.target.value })}
+                />
+              </div>
+              <div className="form-group">
+                <label>SMTP Port</label>
+                <input 
+                  type="number" 
+                  className="form-input" 
+                  value={emailSettings.smtp_port}
+                  onChange={(e) => setEmailSettings({ ...emailSettings, smtp_port: Number(e.target.value) })}
+                />
+              </div>
+            </div>
+
+            <button type="submit" className="header-btn btn-primary" style={{ alignSelf: 'flex-start', marginTop: '2rem' }}>
               Save Settings Configuration
             </button>
             {settingsSuccess && <div className="success-msg" style={{ marginTop: '1rem' }}>Settings and prediction data strategy saved successfully!</div>}
