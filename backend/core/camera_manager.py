@@ -10,7 +10,7 @@ from database import crud, models
 from core.forecasting_engine import recalculate
 from ultralytics import YOLO
 
-# Mappings of COCO categories to our target 4 agricultural threat species
+# Mappings of COCO categories to our target 4 agricultural threat species (for visualization & backward compatibility)
 COCO_MAP = {
     "elephant": "elephant",
     "cow": "nilgai",
@@ -46,29 +46,52 @@ class CameraStreamManager:
         self.tau_timeout = 3.0
         self.test_simulate = False
         
-    def start(self):
+        # Redesigned State Machine variables
+        self.state = "idle"  # "idle", "validating_camera", "loading_model", "initializing_tracker", "opening_camera", "running", "failed"
+        self.phase = "Ready"
+        self.error_message = None
+        self.camera_index = -1
+        self.active_tracks_count = 0
+
+    def list_cameras(self):
+        """Scans for available video capture devices (indexes 0 to 5) and returns them."""
+        available_cameras = []
+        # Always include the simulated mock source
+        available_cameras.append({"id": -1, "name": "Simulated Camera (Mock)"})
+        
+        # Test indexes 0-5
+        for index in range(6):
+            try:
+                # Use a short timeout/open test
+                cap = cv2.VideoCapture(index)
+                if cap is not None and cap.isOpened():
+                    ret, _ = cap.read()
+                    if ret:
+                        available_cameras.append({
+                            "id": index,
+                            "name": f"Physical Camera Device #{index}"
+                        })
+                    cap.release()
+            except Exception:
+                pass
+        return available_cameras
+
+    def start(self, camera_index=0):
         with self._lock:
-            if self.active:
+            # If already running or starting, do nothing
+            if self.active and self.state in ["running", "validating_camera", "loading_model", "initializing_tracker", "opening_camera"]:
                 return True
             
-            print("[CAMERA MANAGER] Starting video stream & pipeline...")
-            # Load YOLO if not already loaded
-            if self.model is None:
-                print("[CAMERA MANAGER] Loading YOLOv8n model...")
-                self.model = YOLO("yolov8n.pt")
-                
-            # Attempt to open real camera, fallback to Mock
-            self.cap = cv2.VideoCapture(0)
-            self.test_simulate = False
-            if not self.cap.isOpened():
-                print("[CAMERA MANAGER] Physical camera not found. Initializing MockVideoCapture...")
-                from edge_pipeline import MockVideoCapture
-                # Set a very high frame count to stream indefinitely
-                self.cap = MockVideoCapture(max_frames=100000)
-                self.test_simulate = True
-                
+            print(f"[CAMERA MANAGER] Initiating startup on camera index {camera_index}...")
             self.active = True
+            self.state = "validating_camera"
+            self.phase = "Checking Camera..."
+            self.error_message = None
+            self.camera_index = camera_index
             self.active_tracks = {}
+            self.active_tracks_count = 0
+            
+            # Run setup and processing in a background thread to keep Flask API responsive
             self.thread = threading.Thread(target=self._run_loop, daemon=True)
             self.thread.start()
             return True
@@ -77,24 +100,85 @@ class CameraStreamManager:
         with self._lock:
             if not self.active:
                 return
-            print("[CAMERA MANAGER] Stopping video stream & pipeline...")
+            print("[CAMERA MANAGER] Deactivation request received.")
             self.active = False
-            if self.thread:
-                self.thread.join(timeout=1.0)
-            if self.cap:
-                self.cap.release()
-            self.cap = None
-            self.latest_frame = None
             
     def get_status(self):
-        return self.active
+        """Returns the full dictionary of telemetry and diagnostics status."""
+        return {
+            "active": self.active,
+            "state": self.state,
+            "phase": self.phase,
+            "camera_index": self.camera_index,
+            "active_tracks_count": self.active_tracks_count,
+            "error": self.error_message
+        }
 
     def _run_loop(self):
         db = SessionLocal()
         from edge_pipeline import GAMMA_LUT, CLAHE_LOW, CLAHE_HIGH, compute_brightness, preprocess_frame
         
+        window_title = "FarmGuard AI Boundary Monitor"
         frame_idx = 0
+        
         try:
+            # Step 1: Validate Camera
+            if self.camera_index >= 0:
+                print(f"[CAMERA MANAGER] Phase 1: Validating camera {self.camera_index}")
+                self.state = "validating_camera"
+                self.phase = "Checking Camera..."
+                temp_cap = cv2.VideoCapture(self.camera_index)
+                if temp_cap is None or not temp_cap.isOpened():
+                    self.state = "failed"
+                    self.error_message = f"Camera device #{self.camera_index} is busy, disconnected, or locked by another app."
+                    self.active = False
+                    return
+                temp_cap.release()
+            
+            # Step 2: Load YOLOv8 Model
+            print("[CAMERA MANAGER] Phase 2: Loading YOLOv8 Model...")
+            self.state = "loading_model"
+            self.phase = "Loading YOLO Model..."
+            if self.model is None:
+                try:
+                    self.model = YOLO("yolov8n.pt")
+                except Exception as e:
+                    self.state = "failed"
+                    self.error_message = f"YOLO weights file could not be initialized: {str(e)}"
+                    self.active = False
+                    return
+            
+            # Step 3: Initialize Tracker
+            print("[CAMERA MANAGER] Phase 3: Initializing Tracker...")
+            self.state = "initializing_tracker"
+            self.phase = "Preparing Tracker..."
+            time.sleep(0.5)  # Yield for visual progress state
+            
+            # Step 4: Open Camera Capture Source
+            print(f"[CAMERA MANAGER] Phase 4: Opening camera source {self.camera_index}...")
+            self.state = "opening_camera"
+            self.phase = "Opening Camera..."
+            if self.camera_index == -1:
+                from edge_pipeline import MockVideoCapture
+                self.cap = MockVideoCapture(max_frames=100000)
+                self.test_simulate = True
+            else:
+                self.cap = cv2.VideoCapture(self.camera_index)
+                self.test_simulate = False
+                if not self.cap.isOpened():
+                    self.state = "failed"
+                    self.error_message = f"Failed to open video capture handle on camera #{self.camera_index}"
+                    self.active = False
+                    return
+
+            # Step 5: Start Detection Stream
+            print("[CAMERA MANAGER] Phase 5: Detection module running.")
+            self.state = "running"
+            self.phase = "Detection active"
+            
+            # Create the OpenCV Native window
+            cv2.namedWindow(window_title, cv2.WINDOW_NORMAL)
+            
             while self.active and self.cap.isOpened():
                 ret, frame = self.cap.read()
                 if not ret or frame is None:
@@ -103,21 +187,20 @@ class CameraStreamManager:
                 current_time = datetime.now()
                 frame_idx += 1
                 
-                # 1. Preprocess using Gamma + CLAHE (Gaps 2)
+                # 1. Image Preprocessing (Gamma & CLAHE)
                 brightness = compute_brightness(frame)
                 enhanced, b_path = preprocess_frame(frame, brightness)
                 
-                # 2. Dynamic thresholding
+                # 2. Dynamic Confidence Threshold
                 conf_thresh = 0.35 if brightness < 60 else 0.50
                 
-                # 3. Track target COCO objects (animals + person) using ByteTrack (Gap 3)
-                target_classes = [14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 0]
-                results = self.model.track(enhanced, persist=True, conf=conf_thresh, classes=target_classes, verbose=False)
+                # 3. Model-Independent Tracking: run tracker on ALL classes in the model
+                # We omit the 'classes' keyword argument to track every class dynamically
+                results = self.model.track(enhanced, persist=True, conf=conf_thresh, verbose=False)
                 
                 detected_ids = set()
                 annotated_frame = enhanced.copy()
                 
-                # Draw bounding boxes and map predictions
                 if results and len(results) > 0:
                     boxes = results[0].boxes
                     if boxes is not None and boxes.id is not None:
@@ -125,27 +208,28 @@ class CameraStreamManager:
                             track_id = int(box.id[0])
                             conf = float(box.conf[0])
                             cls_id = int(box.cls[0])
-                            coco_name = self.model.names[cls_id]
                             
-                            # Map COCO label to target farm threat
-                            species = COCO_MAP.get(coco_name, coco_name)
+                            # Fetch species name from model dictionary (model-independent)
+                            raw_name = self.model.names[cls_id]
+                            # Map if matches COCO animals, otherwise use model class name directly
+                            species = COCO_MAP.get(raw_name, raw_name)
                             
                             detected_ids.add(track_id)
                             
-                            # Visual box annotations for the live feed
+                            # Draw native window bounding boxes
                             xyxy = box.xyxy[0].cpu().numpy().astype(int)
-                            cv2.rectangle(annotated_frame, (xyxy[0], xyxy[1]), (xyxy[2], xyxy[3]), (0, 255, 0), 2)
+                            cv2.rectangle(annotated_frame, (xyxy[0], xyxy[1]), (xyxy[2], xyxy[3]), (0, 0, 255), 2)
                             cv2.putText(
                                 annotated_frame, 
                                 f"Track #{track_id}: {species.replace('_', ' ').capitalize()} ({conf * 100:.1f}%)", 
                                 (xyxy[0], xyxy[1] - 10), 
                                 cv2.FONT_HERSHEY_SIMPLEX, 
                                 0.55, 
-                                (36, 255, 12), 
+                                (0, 255, 0), 
                                 2
                             )
                             
-                            # ByteTrack prevents duplicate entry logs (Gap 3)
+                            # Tracking logic
                             if track_id not in self.active_tracks:
                                 print(f"[CAMERA ENTRY] Track {track_id}: {species} detected.")
                                 self.active_tracks[track_id] = {
@@ -157,7 +241,7 @@ class CameraStreamManager:
                                     "brightness_paths": [b_path]
                                 }
                                 
-                                # Send immediate alerts (Phase 5 notifications)
+                                # Send immediate alerts (Phase 5 email logger)
                                 try:
                                     from core.notifications import log_detection_alert
                                     log_detection_alert(species, track_id, current_time, brightness, conf)
@@ -169,8 +253,10 @@ class CameraStreamManager:
                                 track["confidences"].append(conf)
                                 track["brightnesses"].append(brightness)
                                 track["brightness_paths"].append(b_path)
-                                
-                # Handle inactive tracking tracks (timeouts)
+                
+                self.active_tracks_count = len(self.active_tracks)
+                
+                # Check for lost tracks (timeouts)
                 timed_out_ids = []
                 for tid, track in list(self.active_tracks.items()):
                     if tid not in detected_ids and (current_time - track["last_seen"]).total_seconds() > self.tau_timeout:
@@ -186,7 +272,7 @@ class CameraStreamManager:
                     
                     print(f"[CAMERA EXIT] Track {tid}: {track['species']} left. Duration: {(track['last_seen'] - track['entry_time']).total_seconds():.1f}s. Logging to DB...")
                     
-                    # Log intrusion metadata (Zero image storage decision)
+                    # Transactional Database write
                     crud.log_intrusion(
                         db=db,
                         species_name=track["species"],
@@ -202,25 +288,56 @@ class CameraStreamManager:
                         brightness_path=b_path_mode
                     )
                     
-                    # Recalculate forecast profiles inline (Gap 1)
+                    # Recalculate predictions
                     try:
                         recalculate(track["species"], db)
                     except Exception as e:
                         print(f"Warning: could not recalculate forecast: {e}")
-                        
-                # Encode the annotated frame to JPEG for streaming
-                ret, jpeg = cv2.imencode('.jpg', annotated_frame)
-                if ret:
-                    self.latest_frame = jpeg.tobytes()
+                
+                # Render to the native OpenCV window
+                cv2.imshow(window_title, annotated_frame)
+                
+                # Handle window events and keypresses
+                key = cv2.waitKey(1) & 0xFF
+                if key == 27 or key == ord('q'):  # Escape or 'q' key
+                    print("[CAMERA MANAGER] Termination triggered by keyboard input.")
+                    self.active = False
+                    break
                     
-                # Frame rate throttling (~30 FPS capability matching 30.2 FPS claim)
-                time.sleep(0.03)
+                # Handle manual window close button [X]
+                try:
+                    if cv2.getWindowProperty(window_title, cv2.WND_PROP_VISIBLE) < 1:
+                        print("[CAMERA MANAGER] Native window was closed by the user.")
+                        self.active = False
+                        break
+                except Exception:
+                    pass
+                
+                time.sleep(0.03)  # Loop delay (~30 FPS)
+                
         except Exception as e:
-            print(f"[CAMERA MANAGER] Thread run loop encountered exception: {e}")
+            print(f"[CAMERA MANAGER] Thread exception encountered: {e}")
+            self.state = "failed"
+            self.error_message = f"Inference engine crashed: {str(e)}"
+            self.active = False
         finally:
             db.close()
-            print("[CAMERA MANAGER] Thread release clean.")
+            # Safety clean up
+            try:
+                cv2.destroyAllWindows()
+            except Exception:
+                pass
+            if self.cap:
+                try:
+                    self.cap.release()
+                except Exception:
+                    pass
+            self.cap = None
+            self.active_tracks_count = 0
             
-    def get_frame(self):
-        """Returns the latest annotated JPEG frame bytes."""
-        return self.latest_frame
+            # Reset state unless we are in a failure condition
+            if self.state != "failed":
+                self.state = "idle"
+                self.phase = "Ready"
+                self.active = False
+            print("[CAMERA MANAGER] Native camera thread exited cleanly.")

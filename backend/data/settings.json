@@ -1,5 +1,5 @@
 {
-    "email": "manojpoojary2004@gmail.com",
+    "email": "test@example.com",
     "notifications_enabled": true,
-    "prediction_mode": "live_only"
+    "prediction_mode": "automatic"
 }

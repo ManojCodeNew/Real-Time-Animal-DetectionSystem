@@ -23,7 +23,18 @@ function FarmGuard_Dashboard() {
   // Navigation & Theme tabs state
   const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard', 'detection', 'alerts', 'settings'
   const [lightTheme, setLightTheme] = useState(false);
-  const [cameraActive, setCameraActive] = useState(false);
+  // State variables for dynamic camera selection and diagnostics
+  const [cameraStatus, setCameraStatus] = useState({
+    active: false,
+    state: 'idle',
+    phase: 'Ready',
+    camera_index: -1,
+    active_tracks_count: 0,
+    error: null
+  });
+  const [cameraDevices, setCameraDevices] = useState([]);
+  const [selectedCameraId, setSelectedCameraId] = useState(-1);
+
   
   // Gallery reclassification states
   const [correctingId, setCorrectingId] = useState(null);
@@ -34,10 +45,24 @@ function FarmGuard_Dashboard() {
   const [streamCacheBreaker, setStreamCacheBreaker] = useState(Date.now());
 
   useEffect(() => {
-    // 1. Initial Fetch
+    // 1. Fetch available camera devices
+    const fetchCameraDevices = async () => {
+      try {
+        const res = await axios.get(`${API_BASE}/camera/list`);
+        setCameraDevices(res.data.cameras || []);
+        if (res.data.cameras && res.data.cameras.length > 0) {
+          setSelectedCameraId(res.data.cameras[0].id);
+        }
+      } catch (error) {
+        console.error("Error fetching camera devices:", error);
+      }
+    };
+    fetchCameraDevices();
+
+    // 2. Initial Fetch
     fetchInitialData();
     
-    // 2. Poll camera status, detections, notifications, and forecasts every 3 seconds
+    // 3. Poll camera status, detections, notifications, and forecasts every 3 seconds
     const pollInterval = setInterval(async () => {
       try {
         const [detRes, notifRes, predRes, camRes] = await Promise.all([
@@ -49,7 +74,7 @@ function FarmGuard_Dashboard() {
         setDetections(detRes.data);
         setNotifications(notifRes.data);
         setPredictions(predRes.data);
-        setCameraActive(camRes.data.active);
+        setCameraStatus(camRes.data);
       } catch (error) {
         console.error("Error polling real-time events:", error);
       }
@@ -70,7 +95,7 @@ function FarmGuard_Dashboard() {
       setDetections(detRes.data);
       setPredictions(predRes.data);
       setNotifications(notifRes.data);
-      setCameraActive(camRes.data.active);
+      setCameraStatus(camRes.data);
       
       // Attempt to load settings
       // In Flask, settings are served in the response to settings save,
@@ -140,18 +165,33 @@ function FarmGuard_Dashboard() {
 
   const handleStartCamera = async () => {
     try {
-      const res = await axios.post(`${API_BASE}/camera/start`);
-      setCameraActive(res.data.active);
-      setStreamCacheBreaker(Date.now());
+      setCameraStatus(prev => ({
+        ...prev,
+        active: true,
+        state: 'validating_camera',
+        phase: 'Checking Camera...',
+        error: null
+      }));
+      const res = await axios.post(`${API_BASE}/camera/start`, { camera_index: selectedCameraId });
+      // Fetch latest state immediately
+      const statusRes = await axios.get(`${API_BASE}/camera/status`);
+      setCameraStatus(statusRes.data);
     } catch (error) {
       console.error("Error starting camera thread:", error);
+      setCameraStatus(prev => ({
+        ...prev,
+        active: false,
+        state: 'failed',
+        error: 'Failed to send activation signal to Flask backend.'
+      }));
     }
   };
 
   const handleStopCamera = async () => {
     try {
-      const res = await axios.post(`${API_BASE}/camera/stop`);
-      setCameraActive(res.data.active);
+      await axios.post(`${API_BASE}/camera/stop`);
+      const statusRes = await axios.get(`${API_BASE}/camera/status`);
+      setCameraStatus(statusRes.data);
     } catch (error) {
       console.error("Error stopping camera thread:", error);
     }
@@ -601,50 +641,148 @@ function FarmGuard_Dashboard() {
 
       {activeTab === 'detection' && (
         <div className="camera-card">
-          <div style={{ textAlign: 'center' }}>
-            <h2 style={{ fontSize: '1.5rem', fontWeight: 700 }}>Edge Vision Live Camera Section</h2>
-            <p style={{ color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
-              Activate the edge sensor video stream (applying Preprocessors Gamma+CLAHE & YOLOv8 ByteTrack tracking)
+          <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+            <h2 style={{ fontSize: '1.75rem', fontWeight: 800 }}>AI Detection & Boundary Tracking Console</h2>
+            <p style={{ color: 'var(--text-secondary)', marginTop: '0.4rem' }}>
+              Launch dynamic YOLOv8 object tracking in a native hardware-accelerated window.
             </p>
           </div>
 
-          <div className="camera-stream-wrapper">
-            {cameraActive ? (
-              <img 
-                src={`${API_BASE}/camera/stream?cb=${streamCacheBreaker}`} 
-                alt="Camera Live stream" 
-                className="camera-stream-img"
-              />
-            ) : (
-              <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
-                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ marginBottom: '1rem', opacity: 0.5 }}><path d="M2 2l20 20M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
-                <p style={{ fontWeight: 600 }}>Camera Stream is Offline</p>
-                <p style={{ fontSize: '0.85rem', marginTop: '0.25rem' }}>Click Start Live Feed to activate real-time tracking.</p>
-              </div>
-            )}
+          {/* Camera Selection Dropdown */}
+          <div className="form-group" style={{ maxWidth: '500px', margin: '0 auto 2rem auto' }}>
+            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '700', fontSize: '0.95rem' }}>
+              Select Capture Source:
+            </label>
+            <select 
+              className="form-input" 
+              style={{ padding: '0.75rem 1rem', width: '100%', fontSize: '1rem', borderRadius: '10px' }}
+              value={selectedCameraId}
+              onChange={(e) => setSelectedCameraId(Number(e.target.value))}
+              disabled={cameraStatus.active && cameraStatus.state !== 'failed'}
+            >
+              {cameraDevices.map((cam) => (
+                <option key={cam.id} value={cam.id}>{cam.name}</option>
+              ))}
+            </select>
           </div>
 
-          <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+          {/* Operational Status Display Board */}
+          <div className="camera-stream-wrapper" style={{ minHeight: '260px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '2rem' }}>
+            
+            {/* Case 1: IDLE / OFFLINE */}
+            {!cameraStatus.active && cameraStatus.state !== 'failed' && (
+              <div style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ marginBottom: '1.25rem', opacity: 0.6 }}><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+                <p style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-primary)' }}>System Camera Interface Offline</p>
+                <p style={{ fontSize: '0.9rem', marginTop: '0.5rem', maxWidth: '400px', margin: '0.5rem auto 0 auto' }}>
+                  Starting the engine will open the live tracking feed inside a dedicated high-performance desktop window.
+                </p>
+              </div>
+            )}
+
+            {/* Case 2: LOADING DIAGNOSTICS */}
+            {cameraStatus.active && ['validating_camera', 'loading_model', 'initializing_tracker', 'opening_camera'].includes(cameraStatus.state) && (
+              <div style={{ textAlign: 'center', width: '100%', maxWidth: '400px' }}>
+                {/* Pulsing loading ring */}
+                <div className="loading-spinner-glow" style={{ margin: '0 auto 1.5rem auto' }}></div>
+                <h3 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '0.75rem' }}>Initializing AI Engine</h3>
+                
+                {/* Progress bar stages */}
+                <div style={{ background: 'var(--surface-border)', height: '8px', borderRadius: '4px', overflow: 'hidden', marginBottom: '1rem' }}>
+                  <div 
+                    className="progress-fill-anim"
+                    style={{ 
+                      height: '100%', 
+                      background: 'linear-gradient(90deg, #3b82f6, #8b5cf6)',
+                      width: 
+                        cameraStatus.state === 'validating_camera' ? '25%' :
+                        cameraStatus.state === 'loading_model' ? '50%' :
+                        cameraStatus.state === 'initializing_tracker' ? '75%' : '90%'
+                    }}
+                  ></div>
+                </div>
+                <p style={{ fontSize: '0.95rem', fontWeight: 600, color: '#60a5fa' }} className="capitalize">
+                  {cameraStatus.phase}
+                </p>
+              </div>
+            )}
+
+            {/* Case 3: ACTIVE MONITORING */}
+            {cameraStatus.active && cameraStatus.state === 'running' && (
+              <div style={{ textAlign: 'center', width: '100%' }}>
+                <div className="status-radar-glow" style={{ margin: '0 auto 1.25rem auto' }}></div>
+                <h3 style={{ fontSize: '1.3rem', fontWeight: 800, color: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+                  <span className="status-dot active animate-ping"></span>
+                  NATIVE TRACKING ACTIVE
+                </h3>
+                <p style={{ fontSize: '0.95rem', color: 'var(--text-secondary)', marginTop: '0.5rem', maxWidth: '500px', margin: '0.5rem auto 1.5rem auto' }}>
+                  The border detection viewport has loaded on your desktop. Bounding boxes and tracker logs are being drawn in real-time.
+                </p>
+
+                {/* Telemetry metadata stats */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', maxWidth: '600px', margin: '0 auto' }}>
+                  <div className="panel" style={{ padding: '1rem', textAlign: 'center', background: 'rgba(255,255,255,0.02)' }}>
+                    <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-secondary)' }}>Target Device</div>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 700, marginTop: '0.25rem' }}>#{cameraStatus.camera_index}</div>
+                  </div>
+                  <div className="panel" style={{ padding: '1rem', textAlign: 'center', background: 'rgba(255,255,255,0.02)' }}>
+                    <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-secondary)' }}>Active Tracks</div>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 700, marginTop: '0.25rem', color: '#10b981' }}>{cameraStatus.active_tracks_count}</div>
+                  </div>
+                  <div className="panel" style={{ padding: '1rem', textAlign: 'center', background: 'rgba(255,255,255,0.02)' }}>
+                    <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-secondary)' }}>Status</div>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 700, marginTop: '0.25rem', color: '#60a5fa' }}>Processing</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Case 4: ENGINE FAILURE / STATE ERROR */}
+            {cameraStatus.state === 'failed' && (
+              <div style={{ textAlign: 'center', maxWidth: '500px' }}>
+                <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#f87171" strokeWidth="2" style={{ marginBottom: '1.25rem' }}><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#f87171', marginBottom: '0.5rem' }}>Engine Initialization Failed</h3>
+                <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', background: 'rgba(239,68,68,0.05)', padding: '0.75rem 1.25rem', borderRadius: '8px', border: '1px solid rgba(239,68,68,0.15)', marginBottom: '1.5rem' }}>
+                  {cameraStatus.error || "An unknown hardware or driver conflict was encountered while attempting to open the stream."}
+                </p>
+                <button 
+                  className="header-btn" 
+                  style={{ padding: '0.6rem 1.5rem', background: 'var(--surface-color)', border: '1px solid var(--surface-border)' }}
+                  onClick={() => setCameraStatus({ active: false, state: 'idle', phase: 'Ready', error: null, camera_index: -1, active_tracks_count: 0 })}
+                >
+                  Clear Status & Retry
+                </button>
+              </div>
+            )}
+
+          </div>
+
+          {/* Trigger Control Actions */}
+          <div style={{ display: 'flex', gap: '1.25rem', justifyContent: 'center', marginTop: '2rem' }}>
             <button 
               className="header-btn btn-primary" 
-              style={{ padding: '0.75rem 2rem' }}
+              style={{ padding: '0.85rem 3rem', fontSize: '1.05rem', fontWeight: '600', borderRadius: '10px' }}
               onClick={handleStartCamera}
-              disabled={cameraActive}
+              disabled={cameraStatus.active && cameraStatus.state !== 'failed'}
             >
-              Start Live Feed
+              Start Detection Engine
             </button>
             <button 
               className="header-btn" 
-              style={{ padding: '0.75rem 2rem', background: 'var(--danger-glow)', color: '#fca5a5', borderColor: 'rgba(239,68,68,0.2)' }}
+              style={{ 
+                padding: '0.85rem 3rem', 
+                fontSize: '1.05rem', 
+                fontWeight: '600', 
+                borderRadius: '10px', 
+                background: 'var(--danger-glow)', 
+                color: '#fca5a5', 
+                borderColor: 'rgba(239,68,68,0.2)' 
+              }}
               onClick={handleStopCamera}
-              disabled={!cameraActive}
+              disabled={!cameraStatus.active || cameraStatus.state === 'failed'}
             >
-              Stop Live Feed
+              Stop Detection Engine
             </button>
-            <div className="camera-status-indicator" style={{ marginLeft: '1rem' }}>
-              <span className={`status-dot ${cameraActive ? 'active' : ''}`}></span>
-              <span>{cameraActive ? "ACTIVE SENSOR STREAMING" : "OFFLINE"}</span>
-            </div>
           </div>
         </div>
       )}

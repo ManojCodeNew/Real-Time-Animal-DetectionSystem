@@ -257,43 +257,33 @@ def post_email_setting():
 
 # 6. Camera Pipeline Control endpoints (Phase 6 Detection stream)
 from core.camera_manager import CameraStreamManager
-from flask import Response
+
+@app.route("/api/camera/list", methods=["GET"])
+def list_cameras():
+    cameras = CameraStreamManager.get_instance().list_cameras()
+    return jsonify({"cameras": cameras})
 
 @app.route("/api/camera/start", methods=["POST"])
 def start_camera():
-    active = CameraStreamManager.get_instance().start()
-    return jsonify({"message": "Camera pipeline activated", "active": active})
+    data = request.json or {}
+    camera_index = data.get("camera_index", 0)
+    try:
+        camera_index = int(camera_index)
+    except (ValueError, TypeError):
+        camera_index = 0
+    active = CameraStreamManager.get_instance().start(camera_index)
+    return jsonify({"message": "Camera pipeline activation initiated", "active": active})
 
 @app.route("/api/camera/stop", methods=["POST"])
 def stop_camera():
     CameraStreamManager.get_instance().stop()
-    return jsonify({"message": "Camera pipeline deactivated", "active": False})
+    return jsonify({"message": "Camera pipeline deactivation initiated", "active": False})
 
 @app.route("/api/camera/status", methods=["GET"])
 def get_camera_status():
-    active = CameraStreamManager.get_instance().get_status()
-    return jsonify({"active": active})
+    status = CameraStreamManager.get_instance().get_status()
+    return jsonify(status)
 
-@app.route("/api/camera/stream", methods=["GET"])
-def camera_stream():
-    manager = CameraStreamManager.get_instance()
-    
-    # If not active, return standard offline placeholder image
-    if not manager.get_status():
-        placeholder = np.zeros((480, 640, 3), dtype=np.uint8)
-        cv2.putText(placeholder, "CAMERA FEED OFFLINE", (140, 250), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 2)
-        cv2.putText(placeholder, "Click 'Start Live Feed' to active YOLOv8 detection.", (80, 290), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-        ret, jpeg = cv2.imencode('.jpg', placeholder)
-        return Response(jpeg.tobytes(), mimetype='image/jpeg')
-        
-    def gen():
-        while manager.get_status():
-            frame = manager.get_frame()
-            if frame:
-                yield (b'--frame\r\n'
-                       b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
-            time.sleep(0.04)  # ~25 FPS streaming
-    return Response(gen(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 # Serve captured image crops for the Detection Gallery
 @app.route("/api/images/<path:filename>", methods=["GET"])

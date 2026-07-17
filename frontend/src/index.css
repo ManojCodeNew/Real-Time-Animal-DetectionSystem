@@ -803,3 +803,47 @@ body.light-theme .tab-btn.active {
   animation: pulse 1.5s infinite;
 }
 
+/* Redeemed Loader & Radar Pulse Animations */
+.loading-spinner-glow {
+  width: 50px;
+  height: 50px;
+  border: 4px solid rgba(59, 130, 246, 0.1);
+  border-left-color: var(--primary-color);
+  border-radius: 50%;
+  animation: spin 1s linear infinite, glowPulse 1.5s ease-in-out infinite alternate;
+}
+
+.status-radar-glow {
+  width: 24px;
+  height: 24px;
+  background: rgba(16, 185, 129, 0.2);
+  border: 2px solid var(--success-color);
+  border-radius: 50%;
+  animation: radarWave 2s infinite ease-out;
+}
+
+.progress-fill-anim {
+  transition: width 0.4s ease-out;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes glowPulse {
+  from { box-shadow: 0 0 5px rgba(59, 130, 246, 0.2); }
+  to { box-shadow: 0 0 20px rgba(59, 130, 246, 0.6); }
+}
+
+@keyframes radarWave {
+  0% {
+    transform: scale(0.8);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+}
+
+

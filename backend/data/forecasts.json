@@ -1,27 +1,36 @@
 {
     "elephant": {
         "species": "elephant",
-        "status": "insufficient_data",
-        "message": "Need at least 5 historical events to predict.",
-        "live_events_count": 2,
-        "data_maturity": "live",
-        "is_within_30h": false
+        "status": "success",
+        "predicted_time": "2026-07-18 04:30:00",
+        "confidence_percentage": 84.8,
+        "historical_data_points_used": 59,
+        "live_events_count": 5,
+        "peak_activity_window": "04:00 - 04:59",
+        "data_maturity": "seed",
+        "is_within_30h": true
     },
     "wild_boar": {
         "species": "wild_boar",
-        "status": "insufficient_data",
-        "message": "Need at least 5 historical events to predict.",
+        "status": "success",
+        "predicted_time": "2026-07-18 02:34:00",
+        "confidence_percentage": 84.9,
+        "historical_data_points_used": 47,
         "live_events_count": 1,
-        "data_maturity": "live",
-        "is_within_30h": false
+        "peak_activity_window": "02:00 - 02:59",
+        "data_maturity": "seed",
+        "is_within_30h": true
     },
     "macaque": {
         "species": "macaque",
-        "status": "insufficient_data",
-        "message": "Need at least 5 historical events to predict.",
+        "status": "success",
+        "predicted_time": "2026-07-18 11:22:00",
+        "confidence_percentage": 86.7,
+        "historical_data_points_used": 45,
         "live_events_count": 2,
-        "data_maturity": "live",
-        "is_within_30h": false
+        "peak_activity_window": "11:00 - 11:59",
+        "data_maturity": "seed",
+        "is_within_30h": true
     },
     "nilgai": {
         "species": "nilgai",
@@ -44,5 +53,13 @@
         "peak_activity_window": "01:00 - 01:59",
         "data_maturity": "live",
         "is_within_30h": true
+    },
+    "cell phone": {
+        "species": "cell phone",
+        "status": "insufficient_data",
+        "message": "Need at least 5 historical events to predict.",
+        "live_events_count": 0,
+        "data_maturity": "seed",
+        "is_within_30h": false
     }
 }
