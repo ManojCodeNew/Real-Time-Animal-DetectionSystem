@@ -3,7 +3,8 @@
     "notifications_enabled": true,
     "prediction_mode": "automatic",
     "smtp_sender": "manojpoojary2004@gmail.com",
-    "smtp_password": "sjbq llcd pjwp qhsh",
+    "smtp_password": "",
     "smtp_host": "smtp.gmail.com",
-    "smtp_port": 587
+    "smtp_port": 587,
+    "min_live_events": 10
 }

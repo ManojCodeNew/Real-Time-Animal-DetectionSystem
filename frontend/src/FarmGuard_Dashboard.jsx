@@ -273,10 +273,16 @@ function FarmGuard_Dashboard() {
     intrusions: hourlyCounts[hr] || 0
   })).filter(b => b.intrusions > 0);
 
-  // Statistics calculation
-  const totalIntrusions = detections.filter(d => d.status !== 'false_positive').length;
+  // Statistics calculation - filter by today's date only for the home page counter
+  const todayStr = new Date().toISOString().slice(0, 10); // "YYYY-MM-DD"
+  const todayIntrusions = detections.filter(d => 
+    d.status !== 'false_positive' && 
+    d.entry_time && d.entry_time.slice(0, 10) === todayStr
+  );
+  const totalIntrusions = todayIntrusions.length;
+  // Use correct field name 'duration_seconds' (not 'duration') from backend API
   const avgDuration = totalIntrusions > 0 
-    ? Math.round(detections.filter(d => d.status !== 'false_positive').reduce((acc, curr) => acc + curr.duration, 0) / totalIntrusions)
+    ? Math.round(todayIntrusions.reduce((acc, curr) => acc + (curr.duration_seconds || 0), 0) / totalIntrusions)
     : 0;
   
   const weatherMode = detections.length > 0 ? detections[0].weather_condition : 'Clear';
@@ -414,9 +420,9 @@ function FarmGuard_Dashboard() {
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"></path><path d="M12 8v4l3 3"></path></svg>
               </div>
               <div className="stat-info">
-                <span className="stat-label">Today's Intrusion Count</span>
+                <span className="stat-label">Today's Intrusions</span>
                 <span className="stat-value">{totalIntrusions}</span>
-                <span className="stat-meta">Active and verified logs</span>
+                <span className="stat-meta">Active & verified logs (today)</span>
               </div>
             </div>
 

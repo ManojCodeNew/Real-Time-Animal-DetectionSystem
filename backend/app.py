@@ -68,7 +68,6 @@ def get_detections():
         events = db.query(models.IntrusionEvent)\
             .filter(models.IntrusionEvent.status.in_(["active", "corrected"]))\
             .order_by(models.IntrusionEvent.entry_time.desc())\
-            .limit(10)\
             .all()
             
         result = []
@@ -201,7 +200,7 @@ def get_notifications():
         # Get last 10 live and active events
         events = db.query(models.IntrusionEvent)\
             .filter(models.IntrusionEvent.source == "live")\
-            .filter(models.IntrusionEvent.status == "active")\
+            .filter(models.IntrusionEvent.status.in_(["active", "corrected"]))\
             .order_by(models.IntrusionEvent.entry_time.desc())\
             .limit(10)\
             .all()
